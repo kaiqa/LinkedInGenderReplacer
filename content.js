@@ -60,32 +60,58 @@ function cleanAllText(genderName) {
     });
 }
 
-// Load gender name from storage and apply changes
-chrome.storage.sync.get("genderName", function(data) {
-    let genderName = data.genderName || "";
-    cleanAllText(genderName);
-});
+// Load gender name from storage and apply changes safely
+try {
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+        chrome.storage.sync.get("genderName", function(data) {
+            if (chrome.runtime.lastError) {
+                console.error("Storage error:", chrome.runtime.lastError);
+                return;
+            }
+            let genderName = data.genderName || "";
+            cleanAllText(genderName);
+        });
+    }
+} catch (error) {
+    console.error("Extension context invalidated:", error);
+}
 
-// Listen for storage changes and update dynamically
+// Listen for storage changes and update dynamically, avoiding crashes
 chrome.storage.onChanged.addListener(function(changes, namespace) {
-    if (changes.genderName) {
-        cleanAllText(changes.genderName.newValue);
+    try {
+        if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+            if (changes.genderName) {
+                cleanAllText(changes.genderName.newValue);
+            }
+        }
+    } catch (error) {
+        console.warn("Storage change error:", error);
     }
 });
 
 // Check if observer already exists to prevent duplicates
 if (!window.observer) {
     window.observer = new MutationObserver(mutations => {
-        chrome.storage.sync.get("genderName", function(data) {
-            let genderName = data.genderName || "";
-            mutations.forEach(mutation => {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === 1) { // Only process elements
-                        cleanAllText(genderName);
+        try {
+            if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+                chrome.storage.sync.get("genderName", function(data) {
+                    if (chrome.runtime.lastError) {
+                        console.warn("Observer storage error:", chrome.runtime.lastError);
+                        return;
                     }
+                    let genderName = data.genderName || "";
+                    mutations.forEach(mutation => {
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === 1) { // Only process elements
+                                cleanAllText(genderName);
+                            }
+                        });
+                    });
                 });
-            });
-        });
+            }
+        } catch (error) {
+            console.error("Observer extension context invalidated:", error);
+        }
     });
 
     window.observer.observe(document.body, { childList: true, subtree: true });
